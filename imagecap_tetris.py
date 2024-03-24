@@ -83,6 +83,42 @@ def image_capture(shared_array):
     cap = cv2.VideoCapture(1)
     pTime = 0
 
+    # Set window size
+    cv2.namedWindow("Image", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Image", 800, 750)  # Adjust dimensions as needed
+
+    # Landmarks to display
+    landmark_indices = [
+        mpPose.PoseLandmark.LEFT_SHOULDER,
+        mpPose.PoseLandmark.RIGHT_SHOULDER,
+        mpPose.PoseLandmark.LEFT_ELBOW,
+        mpPose.PoseLandmark.RIGHT_ELBOW,
+        mpPose.PoseLandmark.LEFT_WRIST,
+        mpPose.PoseLandmark.RIGHT_WRIST,
+        mpPose.PoseLandmark.LEFT_HIP,
+        mpPose.PoseLandmark.RIGHT_HIP,
+        mpPose.PoseLandmark.LEFT_KNEE,
+        mpPose.PoseLandmark.RIGHT_KNEE,
+        mpPose.PoseLandmark.LEFT_ANKLE,
+        mpPose.PoseLandmark.RIGHT_ANKLE,
+    ]
+
+    # Connections to display
+    connections = [
+        (mpPose.PoseLandmark.LEFT_SHOULDER, mpPose.PoseLandmark.RIGHT_SHOULDER),
+        (mpPose.PoseLandmark.RIGHT_ELBOW, mpPose.PoseLandmark.RIGHT_SHOULDER),
+        (mpPose.PoseLandmark.LEFT_ELBOW, mpPose.PoseLandmark.LEFT_SHOULDER),
+        (mpPose.PoseLandmark.LEFT_WRIST, mpPose.PoseLandmark.LEFT_ELBOW),
+        (mpPose.PoseLandmark.RIGHT_WRIST, mpPose.PoseLandmark.RIGHT_ELBOW),
+        (mpPose.PoseLandmark.LEFT_HIP, mpPose.PoseLandmark.LEFT_SHOULDER),
+        (mpPose.PoseLandmark.RIGHT_HIP, mpPose.PoseLandmark.RIGHT_SHOULDER),
+        (mpPose.PoseLandmark.LEFT_KNEE, mpPose.PoseLandmark.LEFT_HIP),
+        (mpPose.PoseLandmark.RIGHT_KNEE, mpPose.PoseLandmark.RIGHT_HIP),
+        (mpPose.PoseLandmark.LEFT_ANKLE, mpPose.PoseLandmark.LEFT_KNEE),
+        (mpPose.PoseLandmark.RIGHT_ANKLE, mpPose.PoseLandmark.RIGHT_KNEE),
+        (mpPose.PoseLandmark.RIGHT_HIP, mpPose.PoseLandmark.LEFT_HIP),
+    ]
+
     # Video capture loop
     while True:
         # Capture and process image
@@ -92,9 +128,6 @@ def image_capture(shared_array):
         results = pose.process(imgRGB)
 
         if results.pose_landmarks:
-            # Place landmarks and connections on display window
-            mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
-
             # Extract desired landmarks (flip L & R bc image is mirrored)
             l_wrist = results.pose_landmarks.landmark[mpPose.PoseLandmark.RIGHT_WRIST]
             r_wrist = results.pose_landmarks.landmark[mpPose.PoseLandmark.LEFT_WRIST]
@@ -103,13 +136,27 @@ def image_capture(shared_array):
             shared_array[:4] = [l_wrist.x, l_wrist.y, l_wrist.z, l_wrist.visibility]
             shared_array[4:] = [r_wrist.x, r_wrist.y, r_wrist.z, r_wrist.visibility]
 
-            # Place better-looking points on image
-            for lm in results.pose_landmarks.landmark:
-                h, w, c = img.shape
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                cv2.circle(img, (cx, cy), 5, (255, 0, 0), cv2.FILLED)
+            # Place points on image
+            for i in landmark_indices:
+                lm = results.pose_landmarks.landmark[i]
+                if lm.visibility > 0.5:
+                    h, w, c = img.shape
+                    cx, cy = int(lm.x * w), int(lm.y * h)
+                    cv2.circle(img, (cx, cy), 5, (255, 0, 0), cv2.FILLED)
 
-        # Draw a horizontal blue dotted line at y = 0.3
+            # Draw lines between selected landmarks
+            for connection in connections:
+                start_idx, end_idx = connection
+                start_lm = results.pose_landmarks.landmark[start_idx]
+                end_lm = results.pose_landmarks.landmark[end_idx]
+                if start_lm.visibility > 0.5 and end_lm.visibility > 0.5:
+                    start_point = (int(start_lm.x * w), int(start_lm.y * h))
+                    end_point = (int(end_lm.x * w), int(end_lm.y * h))
+                    cv2.line(
+                        img, start_point, end_point, (255, 255, 255), 2, cv2.LINE_AA
+                    )
+
+        # Draw a horizontal green line at y = 0.3
         line_color = (48, 172, 119)
         line_y = int(0.3 * img.shape[0])
         cv2.line(img, (0, line_y), (img.shape[1], line_y), line_color, 2, cv2.LINE_8, 0)
@@ -118,29 +165,7 @@ def image_capture(shared_array):
         cv2.waitKey(1)
 
 
-def script2(shared_array):
-    while True:
-        # Script 2 logic
-        l_wrist_x, l_wrist_y, l_wrist_z, l_wrist_visibility = shared_array[:4]
-        r_wrist_x, r_wrist_y, r_wrist_z, r_wrist_visibility = shared_array[4:]
-        if all(val != 0.0 for val in shared_array):
-            print(
-                "Left wrist details:",
-                l_wrist_x,
-                l_wrist_y,
-                l_wrist_z,
-                l_wrist_visibility,
-            )
-            print(
-                "Right wrist details:",
-                r_wrist_x,
-                r_wrist_y,
-                r_wrist_z,
-                r_wrist_visibility,
-            )
-        time.sleep(0.25)
-
-
+# -------- Cooldown timer -------- #
 class CustomTimer:
     def __init__(self, interval):
         self.interval = interval
@@ -449,7 +474,7 @@ def main(window, shared_array):
     score = 0
     last_score = get_max_score()
 
-    cooldown_duration = 0.5
+    cooldown_duration = 0.4
     cooldown_timer = CustomTimer(cooldown_duration)
     while run:
         # need to constantly make new grid as locked positions always change
