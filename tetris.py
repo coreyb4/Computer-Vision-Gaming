@@ -579,7 +579,7 @@ def main(window, shared_array):
 
 
 def main_menu(shared_array):
-    os.environ["SDL_VIDEO_WINDOW_POS"] = "%d,%d" % (500, 0)
+    os.environ["SDL_VIDEO_WINDOW_POS"] = "%d,%d" % (1000, -930)
     pygame.font.init()
     win = pygame.display.set_mode((s_width, s_height))
     pygame.display.set_caption("Tetris")
